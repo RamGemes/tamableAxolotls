@@ -1,7 +1,11 @@
 package net.ramgames.tamableaxolotls.mixins;
 
 
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.advancement.criterion.Criteria;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.Bucketable;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -33,6 +37,7 @@ import net.minecraft.world.World;
 import net.ramgames.tamableaxolotls.AxolotlAttackWithOwnerGoal;
 import net.ramgames.tamableaxolotls.AxolotlEntityAccess;
 import net.ramgames.tamableaxolotls.AxolotlFollowOwnerGoal;
+import net.ramgames.tamableaxolotls.TamableAxolotls;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -41,6 +46,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -59,9 +65,9 @@ public abstract class AxolotlEntityMixin extends AnimalEntity implements Axolotl
         this.onTamedChanged();
     }
     @Inject(method = "initDataTracker", at = @At("TAIL"))
-    protected void initDataTracker(CallbackInfo ci) {
-        this.dataTracker.startTracking(TAMEABLE_FLAGS, (byte)0);
-        this.dataTracker.startTracking(OWNER_UUID, Optional.empty());
+    protected void initDataTracker(CallbackInfo ci, @Local(argsOnly = true) DataTracker.Builder builder) {
+        builder.add(TAMEABLE_FLAGS, (byte)0);
+        builder.add(OWNER_UUID, Optional.empty());
     }
     @Inject(method = "writeCustomDataToNbt", at = @At("TAIL"))
     public void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
@@ -93,9 +99,9 @@ public abstract class AxolotlEntityMixin extends AnimalEntity implements Axolotl
         this.sitting = nbt.getBoolean("Sitting");
         this.setInSittingPose(this.sitting);
     }
-    @Inject(method = "copyDataToStack", at = @At(value = "TAIL"))
-    public void addOwnerToBucketNbt(ItemStack stack, CallbackInfo ci) {
-        if(this.getOwnerUuid() != null) stack.getOrCreateNbt().putUuid("Owner", getOwnerUuid());
+    @Inject(method = "method_57305", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/passive/AxolotlEntity;getBrain()Lnet/minecraft/entity/ai/brain/Brain;", shift = At.Shift.BEFORE))
+    public void addOwnerToBucketNbt(NbtCompound nbt, CallbackInfo ci) {
+        if(this.getOwnerUuid() != null) nbt.putUuid("Owner", getOwnerUuid());
     }
 
     @Inject(method = "copyDataFromNbt", at = @At(value = "TAIL"))
@@ -207,9 +213,10 @@ public abstract class AxolotlEntityMixin extends AnimalEntity implements Axolotl
         return true;
     }
 
-    @Override
-    public boolean cannotDespawn() {
-        return isTamed();
+
+    @ModifyReturnValue(method = "cannotDespawn", at = @At("RETURN"))
+    public boolean cannotDespawn(boolean original) {
+        return original | isTamed();
     }
 
     @Unique
@@ -270,6 +277,7 @@ public abstract class AxolotlEntityMixin extends AnimalEntity implements Axolotl
         return uUID == null ? null : this.getWorld().getPlayerByUuid(uUID);
     }
 
+    @SuppressWarnings("UnreachableCode")
     public ActionResult interactMob(PlayerEntity player, Hand hand) {
         Optional<ActionResult> result = Bucketable.tryBucket(player, hand, (AxolotlEntity)(Object)this);
         if(result.isPresent()) return result.get();
@@ -290,7 +298,8 @@ public abstract class AxolotlEntityMixin extends AnimalEntity implements Axolotl
                             return ActionResult.SUCCESS;
                         }
                         else {
-                            this.heal((float) item.getFoodComponent().getHunger());
+                            FoodComponent foodComp = itemStack.get(DataComponentTypes.FOOD);
+                            if(foodComp != null) this.heal((float) foodComp.nutrition());
                             return ActionResult.SUCCESS;
                         }
                     }
@@ -321,6 +330,7 @@ public abstract class AxolotlEntityMixin extends AnimalEntity implements Axolotl
         return super.interactMob(player, hand);
     }
 
+    @SuppressWarnings("UnreachableCode")
     protected void initGoals() {
         this.goalSelector.add(12, new AxolotlFollowOwnerGoal((AxolotlEntity)(Object)this, 0.75, 10, 2, false));
         this.goalSelector.add(18, new AxolotlAttackWithOwnerGoal((AxolotlEntity)(Object)this));

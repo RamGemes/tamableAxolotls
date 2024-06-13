@@ -8,6 +8,7 @@ public class TamableAxolotls implements ModInitializer {
 
     public static final String MOD_ID = "tamable_axolotls";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
     @Override
     public void onInitialize() {
         LOGGER.info("tamable axolotls is booting up!");
